@@ -10,7 +10,7 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
 {
     public const string PartitionKeyHeaderName = "hash-on";
 
-    public Task CreateTopologyAsync(
+    public async Task CreateTopologyAsync(
         string publisherSource,
         string consumerDestination,
         TopologyType topologyType,
@@ -19,38 +19,39 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
         PartitioningOptions? partitioningOptions = default,
         CancellationToken cancellationToken = default)
     {
-        var channel = channelFactory.CreateForConsumer();
+        var channel = await channelFactory.CreateForConsumerAsync();
 
         consumerCustomArgs ??= new Dictionary<string, object>();
         
-        ConfigureDeadletter(consumerDestination, consumerCustomArgs, channel);
+        await ConfigureDeadletterAsync(consumerDestination, consumerCustomArgs, channel);
         
         switch (topologyType)
         {
             case TopologyType.Direct:
-                CreateDirect(publisherSource, consumerDestination, filter, consumerCustomArgs, channel);
+                await CreateDirectAsync(publisherSource, consumerDestination, filter, consumerCustomArgs, channel,
+                    cancellationToken: cancellationToken);
                 break;
             case TopologyType.PublishSubscribe:
-                if (partitioningOptions == null)
+                if (partitioningOptions is null)
                 {
-                    CreatePubSub(publisherSource, consumerDestination, filter, consumerCustomArgs, channel);
+                    await CreatePubSubAsync(publisherSource, consumerDestination, filter, consumerCustomArgs, channel,
+                        cancellationToken: cancellationToken);
                 }
                 else
                 {
-                    CreatePubSubWithPartitioning(publisherSource, consumerDestination, filter, consumerCustomArgs, channel, partitioningOptions);
+                    await CreatePubSubWithPartitioningAsync(publisherSource, consumerDestination, filter, consumerCustomArgs, 
+                        channel, partitioningOptions, cancellationToken: cancellationToken);
                 }
                 break;
             case TopologyType.PublisherToPublisher:
-                CreatePubToPub(publisherSource, consumerDestination, filter, channel);
+                await CreatePubToPubAsync(publisherSource, consumerDestination, filter, channel, cancellationToken: cancellationToken);
                 break;
             default:
                 throw new NotImplementedException($"{nameof(topologyType)} is not supported!");
         }
-
-        return Task.CompletedTask;
     }
 
-    private void ConfigureDeadletter(string consumerDestination, Dictionary<string, object> consumerCustomArgs, IModel channel)
+    private async Task ConfigureDeadletterAsync(string consumerDestination, Dictionary<string, object> consumerCustomArgs, IChannel channel)
     {
         var dlqDeclaredByCaller = consumerCustomArgs.TryGetValue("x-dead-letter-exchange", out var dlqDeclared);
         var dlqExchange = dlqDeclared?.ToString();
@@ -71,21 +72,22 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
         if (resiliencyOptions.Consumer.UseDeadletter && !string.IsNullOrEmpty(consumerDestination))
         {
             var dlqQueue = consumerDestination + "-dlq";
-            CreatePubSub(dlqExchange, dlqQueue, "", null!, channel);
+            await CreatePubSubAsync(dlqExchange, dlqQueue, "", null!, channel);
         }
     }
 
-    private void CreateDirect(
+    private async Task CreateDirectAsync(
         string publisherSource,
         string consumerDestination,
         string filter,
         Dictionary<string, object> consumerCustomArgs,
-        IModel channel)
+        IChannel channel,
+        CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(publisherSource))
         {
             logger.LogInformation($"Declaring exchange of name {publisherSource}");
-            channel.ExchangeDeclare(publisherSource, ExchangeType.Direct, durable: true);
+            await channel.ExchangeDeclareAsync(publisherSource, ExchangeType.Direct, durable: true, cancellationToken: cancellationToken);
         }
         else
         {
@@ -93,23 +95,24 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
         }
 
         logger.LogInformation($"Declaring queue of name {consumerDestination}");
-        channel.QueueDeclare(consumerDestination, durable: true, exclusive: false, autoDelete: false, consumerCustomArgs);
+        await channel.QueueDeclareAsync(consumerDestination, durable: true, exclusive: false, autoDelete: false, consumerCustomArgs, cancellationToken: cancellationToken);
 
         if (!string.IsNullOrEmpty(publisherSource))
         {
-            channel.QueueBind(queue: consumerDestination, exchange: publisherSource, routingKey: filter);
+            await channel.QueueBindAsync(queue: consumerDestination, exchange: publisherSource, routingKey: filter, cancellationToken: cancellationToken);
         }
     }
 
-    private void CreatePubSub(
+    private async Task CreatePubSubAsync(
         string publisherSource,
         string consumerDestination,
         string filter,
         Dictionary<string, object> consumerCustomArgs,
-        IModel channel)
+        IChannel channel,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation($"Declaring exchange of name {publisherSource}");
-        channel.ExchangeDeclare(publisherSource, ExchangeType.Topic, durable: true);
+        await channel.ExchangeDeclareAsync(publisherSource, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
 
         if (string.IsNullOrEmpty(consumerDestination))
         {
@@ -118,25 +121,27 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
         }
         
         logger.LogInformation($"Declaring queue of name {consumerDestination}");
-        channel.QueueDeclare(consumerDestination, durable: true, exclusive: false, autoDelete: false, consumerCustomArgs);
+        await channel.QueueDeclareAsync(consumerDestination, durable: true, exclusive: false, autoDelete: false, 
+            consumerCustomArgs, cancellationToken: cancellationToken);
         
-        channel.QueueBind(queue: consumerDestination, exchange: publisherSource, 
+        await channel.QueueBindAsync(queue: consumerDestination, exchange: publisherSource, 
             routingKey: string.IsNullOrEmpty(filter) 
                 ? "#"       // Broadcast like fanout
                 : filter    // custom filter pattern with substitute chars ('#' or '*')
-        );
+        , cancellationToken: cancellationToken);
     }
 
-    private void CreatePubSubWithPartitioning(
+    private async Task CreatePubSubWithPartitioningAsync(
         string publisherSource,
         string consumerDestination,
         string filter,
         Dictionary<string, object> consumerCustomArgs,
-        IModel channel,
-        PartitioningOptions? partitioningOptions = default)
+        IChannel channel,
+        PartitioningOptions? partitioningOptions = default,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation($"Declaring exchange of name {publisherSource}");
-        channel.ExchangeDeclare(publisherSource, ExchangeType.Topic, durable: true);
+        await channel.ExchangeDeclareAsync(publisherSource, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
 
         if (string.IsNullOrEmpty(consumerDestination))
         {
@@ -147,7 +152,7 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
         logger.LogInformation($"Requested partitioned topology for {consumerDestination}");
         var partitionedExchange = PartitionName.ForConsumerDedicatedExchange(consumerDestination);
         logger.LogInformation($"Declaring dedicated exchange for consumer with name {consumerDestination}");
-        CreatePubToPub(publisherSource, partitionedExchange, filter, channel, forPartitioning: true);
+        CreatePubToPubAsync(publisherSource, partitionedExchange, filter, channel, forPartitioning: true);
 
         var consumerCustomArgsForPartitioning = new Dictionary<string, object>(consumerCustomArgs);
         consumerCustomArgsForPartitioning.Add("x-single-active-consumer", partitioningOptions.OnlyOneActiveConsumerPerPartition);
@@ -159,27 +164,29 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
             var partitionedQueueName = PartitionName.ForQueue(consumerDestination, partitionNum);
             logger.LogInformation($"Declaring queue of name {partitionedQueueName}");
                 
-            channel.QueueDeclare(partitionedQueueName, durable: true, exclusive: false, autoDelete: false, consumerCustomArgsForPartitioning);
+            await channel.QueueDeclareAsync(partitionedQueueName, durable: true, exclusive: false, autoDelete: false, 
+                consumerCustomArgsForPartitioning, cancellationToken: cancellationToken);
             
-            channel.QueueBind(queue: partitionedQueueName, exchange: partitionedExchange, 
+            await channel.QueueBindAsync(queue: partitionedQueueName, exchange: partitionedExchange, 
                 routingKey: "1" /* Let's assume that each consumer has same weight, so they get partitions split evenly */
-            );
+            , cancellationToken: cancellationToken);
         }
     }
 
-    private void CreatePubToPub(string publisherSource, string consumerDestination, string filter, IModel channel, bool forPartitioning = false)
+    private async Task CreatePubToPubAsync(string publisherSource, string consumerDestination, string filter, IChannel channel,
+        bool forPartitioning = false, CancellationToken cancellationToken = default)
     {
         logger.LogInformation($"Declaring exchange of name {publisherSource}");
-        channel.ExchangeDeclare(publisherSource, ExchangeType.Topic, durable: true);
+        await channel.ExchangeDeclareAsync(publisherSource, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
             
         logger.LogInformation($"Declaring exchange of name {consumerDestination}");
         if (!forPartitioning)
         {
-            channel.ExchangeDeclare(consumerDestination, ExchangeType.Topic, durable: true);
+            await channel.ExchangeDeclareAsync(consumerDestination, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
         }
         else
         {
-            channel.ExchangeDeclare(
+            await channel.ExchangeDeclareAsync(
                 consumerDestination,
                 "x-consistent-hash",
                 durable: true,
@@ -188,12 +195,13 @@ internal class RabbitMqTopologyBuilder(ChannelFactory channelFactory, Resiliency
                     {
                         "hash-header", PartitionKeyHeaderName
                     }
-                });
+                },
+                cancellationToken: cancellationToken);
         }
 
-        channel.ExchangeBind(source: publisherSource, destination: consumerDestination, routingKey: string.IsNullOrEmpty(filter) 
+        await channel.ExchangeBindAsync(source: publisherSource, destination: consumerDestination, routingKey: string.IsNullOrEmpty(filter) 
                 ? "#"       // Broadcast like fanout
                 : filter    // custom filter pattern with substitute chars ('#' or '*')
-        );
+        , cancellationToken: cancellationToken);
     }
 }

@@ -31,11 +31,11 @@ public class TranslationsServiceIntegrationTests : IAsyncLifetime
     {
         await _messagingTestProvider.RabbitMqContainer.StartAsync();
 
-        _messagingTestProvider.Initialize(channel =>
+        await _messagingTestProvider.InitializeAsync(async channel =>
         {
-            channel.ExchangeDeclare(exchange: "inquiry-submitted-exchange", type: "direct", durable: false, autoDelete: false, arguments: null);
-            channel.QueueDeclare(queue: QueueV1, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.QueueDeclare(queue: QueueV2, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            await channel.ExchangeDeclareAsync(exchange: "inquiry-submitted-exchange", type: "direct", durable: false, autoDelete: false, arguments: null);
+            await channel.QueueDeclareAsync(queue: QueueV1, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            await channel.QueueDeclareAsync(queue: QueueV2, durable: false, exclusive: false, autoDelete: false, arguments: null);
         });
     }
 

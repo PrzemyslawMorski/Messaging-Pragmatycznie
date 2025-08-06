@@ -30,20 +30,20 @@ internal sealed class RabbitMqMessageConsumer(
         string[]? acceptedMessageTypes = default,
         CancellationToken cancellationToken = default) where TMessage : class, IMessage
     {
-        var channel = channelFactory.CreateForConsumer();
-        ConfigureConsumerQos(channel);
-        var consumer = new EventingBasicConsumer(channel);
+        var channel = await channelFactory.CreateForConsumerAsync();
+        await ConfigureConsumerQosAsync(channel);
+        var consumer = new AsyncEventingBasicConsumer(channel);
         var (destination, _) = conventionProvider.Get<TMessage>();
         var destinationResolved = queue ?? destination;
         
-        consumer.Received += async (model, ea) =>
+        consumer.ReceivedAsync += async (model, ea) =>
         {
             SetMessageProperties(ea.BasicProperties, ea.Redelivered);
             using var activity = CreateMessagingConsumeActivity(ea.BasicProperties);
 
             if (IsNotAcceptedMessageType(acceptedMessageTypes, ea))
             {
-                channel.BasicAck(ea.DeliveryTag, false); // ACK instead of NACK or REJECT to not trigger DLQ routing
+                await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken); // ACK instead of NACK or REJECT to not trigger DLQ routing
                 return;
             }
 
@@ -55,35 +55,35 @@ internal sealed class RabbitMqMessageConsumer(
             {
                 logger.LogError(exception, "An error occured while handling a message");
                 Activity.Current?.SetStatus(ActivityStatusCode.Error, exception.Message);
-                await OnHandleFailure<TMessage>(ea, channel, exception, destinationResolved);
+                await OnHandleFailure<TMessage>(ea, channel, exception, destinationResolved, cancellationToken);
                 return;
             }
             
-            channel.BasicAck(ea.DeliveryTag, false);
+            await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
         };
 
         await EnsureTopologyReady(cancellationToken);
         
-        channel.BasicConsume(queue: destinationResolved, autoAck: false, consumer: consumer);
+        await channel.BasicConsumeAsync(queue: destinationResolved, autoAck: false, consumer: consumer, cancellationToken);
         return this;
     }
 
     public async Task<IMessageConsumer> ConsumeNonGeneric(Func<MessageData, Task> handleRawPayload, string queue, string[]? acceptedMessageTypes = default,
         CancellationToken cancellationToken = default)
     {
-        var channel = channelFactory.CreateForConsumer();
-        ConfigureConsumerQos(channel);
-        var consumer = new EventingBasicConsumer(channel);
+        var channel = await channelFactory.CreateForConsumerAsync();
+        await ConfigureConsumerQosAsync(channel);
+        var consumer = new AsyncEventingBasicConsumer(channel);
         var destinationResolved = queue;
         
-        consumer.Received += async (model, ea) =>
+        consumer.ReceivedAsync += async (model, ea) =>
         {
             SetMessageProperties(ea.BasicProperties, ea.Redelivered);
             using var activity = CreateMessagingConsumeActivity(ea.BasicProperties);
 
             if (IsNotAcceptedMessageType(acceptedMessageTypes, ea))
             {
-                channel.BasicAck(ea.DeliveryTag, false); // ACK instead of NACK or REJECT to not trigger DLQ routing
+                await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken); // ACK instead of NACK or REJECT to not trigger DLQ routing
                 return;
             }
 
@@ -96,16 +96,16 @@ internal sealed class RabbitMqMessageConsumer(
             {
                 logger.LogError(exception, "An error occured while handling a message");
                 Activity.Current?.SetStatus(ActivityStatusCode.Error, exception.Message);
-                await OnHandleFailureNonGeneric(ea, channel, exception, destinationResolved);
+                await OnHandleFailureNonGeneric(ea, channel, exception, destinationResolved, cancellationToken);
                 return;
             }
           
-            channel.BasicAck(ea.DeliveryTag, false);
+            await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
         };
 
         await EnsureTopologyReady(cancellationToken);
         
-        channel.BasicConsume(queue: queue, autoAck: false, consumer: consumer);
+        await channel.BasicConsumeAsync(queue: queue, autoAck: false, consumer: consumer, cancellationToken);
         return this;
     }
 
@@ -114,12 +114,12 @@ internal sealed class RabbitMqMessageConsumer(
         string? queue = default,
         CancellationToken cancellationToken = default) where TMessage : class, IMessage
     {
-        var channel = channelFactory.CreateForConsumer();
+        var channel = await channelFactory.CreateForConsumerAsync();
         var (destination, _) = conventionProvider.Get<TMessage>();
 
         await EnsureTopologyReady(cancellationToken);
         
-        var result = channel.BasicGet(queue: queue ?? destination, autoAck: false);
+        var result = await channel.BasicGetAsync(queue: queue ?? destination, autoAck: false, cancellationToken);
         if (result is null)
         {
             return;
@@ -129,7 +129,7 @@ internal sealed class RabbitMqMessageConsumer(
 
         await handle(message);
         
-        channel.BasicAck(result.DeliveryTag, false);
+        await channel.BasicAckAsync(result.DeliveryTag, false, cancellationToken);
     }
 
     public async Task<IMessageConsumer> ConsumeMessageFromPartitions<TMessage>(
@@ -218,8 +218,8 @@ internal sealed class RabbitMqMessageConsumer(
         logger.LogWarning($"[{DateTime.UtcNow:O}] Processed message:{Environment.NewLine} {message}");
     }
     
-    private async Task OnHandleFailure<TMessage>(BasicDeliverEventArgs ea, IModel channel, Exception exception,
-            string destinationResolved) where TMessage : class, IMessage
+    private async Task OnHandleFailure<TMessage>(BasicDeliverEventArgs ea, IChannel channel, Exception exception,
+            string destinationResolved, CancellationToken cancellationToken = default) where TMessage : class, IMessage
     {
         var messageId = GetMessageId(ea.BasicProperties);
         reliableConsuming.OnConsumeFailed(messageId);
@@ -228,13 +228,13 @@ internal sealed class RabbitMqMessageConsumer(
         {
             // Let broker handle the retry
             logger.LogWarning("Consume failed for messageId: {messageId}; will retry via broker", messageId);
-            channel.BasicNack(ea.DeliveryTag, false, requeue: true);
+            await channel.BasicNackAsync(ea.DeliveryTag, false, requeue: true, cancellationToken);
         }
         else
         {
             // Retries exhausted - say goodbye to the message
             logger.LogError("Broker retries limit exhausted for messageId: {messageId}", messageId);
-            channel.BasicReject(ea.DeliveryTag, false);
+            await channel.BasicRejectAsync(ea.DeliveryTag, false, cancellationToken);
                     
             var message = serializer.DeserializeBinary<TMessage>(ea.Body.ToArray());
             SetMessageProperties(ea.BasicProperties, ea.Redelivered);
@@ -242,8 +242,8 @@ internal sealed class RabbitMqMessageConsumer(
         }
     }
     
-    private async Task OnHandleFailureNonGeneric(BasicDeliverEventArgs ea, IModel channel, Exception exception,
-        string destinationResolved)
+    private async Task OnHandleFailureNonGeneric(BasicDeliverEventArgs ea, IChannel channel, Exception exception,
+        string destinationResolved, CancellationToken cancellationToken = default)
     {
         var messageId = GetMessageId(ea.BasicProperties);
         reliableConsuming.OnConsumeFailed(messageId);
@@ -252,13 +252,13 @@ internal sealed class RabbitMqMessageConsumer(
         {
             // Let broker handle the retry
             logger.LogWarning("Consume failed for messageId: {messageId}; will retry via broker", messageId);
-            channel.BasicNack(ea.DeliveryTag, false, requeue: true);
+            await channel.BasicNackAsync(ea.DeliveryTag, false, requeue: true, cancellationToken);
         }
         else
         {
             // Retries exhausted - say goodbye to the message
             logger.LogError("Broker retries limit exhausted for messageId: {messageId}", messageId);
-            channel.BasicReject(ea.DeliveryTag, false);
+            await channel.BasicRejectAsync(ea.DeliveryTag, false, cancellationToken);
                     
             var message = serializer.DeserializeBinary<string>(ea.Body.ToArray());
             SetMessageProperties(ea.BasicProperties);
@@ -271,7 +271,7 @@ internal sealed class RabbitMqMessageConsumer(
             return acceptedMessageTypes is not null && !acceptedMessageTypes.Contains(ea.BasicProperties.Type);
         }
 
-    private void SetMessageProperties(IBasicProperties props, bool redelivered = false)
+    private void SetMessageProperties(IReadOnlyBasicProperties props, bool redelivered = false)
     {
         var messageId = props.MessageId;
         var headers = props.Headers?
@@ -293,7 +293,7 @@ internal sealed class RabbitMqMessageConsumer(
     /// <summary>
     /// Build children span due to the -> https://github.com/jaegertracing/jaeger/issues/4516
     /// </summary>
-    private Activity? CreateMessagingConsumeActivity(IBasicProperties props)
+    private Activity? CreateMessagingConsumeActivity(IReadOnlyBasicProperties props)
     {
         var isHeaderPresent = props.Headers?.ContainsKey(MessagingObservabilityHeaders.TraceParent) ?? false;
 
@@ -313,17 +313,17 @@ internal sealed class RabbitMqMessageConsumer(
             links: [new ActivityLink(parentContext)]);
     }
 
-    private static Guid GetMessageId(IBasicProperties props)
+    private static Guid GetMessageId(IReadOnlyBasicProperties props)
     {
         var messageId = props.MessageId;
         return Guid.Parse(messageId);
     }
 
-    private void ConfigureConsumerQos(IModel channel)
+    private async Task ConfigureConsumerQosAsync(IChannel channel)
     {
         if (resiliencyOptions.Consumer.MaxMessagesFetchedPerConsumer > 0)
         {
-            channel.BasicQos(
+            await channel.BasicQosAsync(
                 prefetchSize: 0, 
                 prefetchCount: (ushort)resiliencyOptions.Consumer.MaxMessagesFetchedPerConsumer, 
                 global: false);

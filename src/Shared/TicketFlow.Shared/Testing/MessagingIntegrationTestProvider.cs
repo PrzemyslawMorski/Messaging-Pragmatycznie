@@ -15,7 +15,7 @@ public sealed class MessagingIntegrationTestProvider<TProgram> : IAsyncDisposabl
     public WebApplicationFactory<TProgram> Factory;
     
     private IConnection _rabbitConnection;
-    private IModel _rabbitChannel;
+    private IChannel _rabbitChannel;
     private readonly JsonSerializer _jsonSerializer = new();
 
     public MessagingIntegrationTestProvider(Action<IServiceCollection> configureServices)
@@ -47,7 +47,7 @@ public sealed class MessagingIntegrationTestProvider<TProgram> : IAsyncDisposabl
             });
     }
 
-    public void Initialize(Action<IModel> provisionTopology)
+    public async Task InitializeAsync(Action<IChannel> provisionTopology)
     {
         var factory = new ConnectionFactory
         {
@@ -55,31 +55,31 @@ public sealed class MessagingIntegrationTestProvider<TProgram> : IAsyncDisposabl
             Port = RabbitMqContainer.GetMappedPublicPort(5672)
         };
 
-        _rabbitConnection = factory.CreateConnection();
-        _rabbitChannel = _rabbitConnection.CreateModel();
+        _rabbitConnection = await factory.CreateConnectionAsync();
+        _rabbitChannel = await _rabbitConnection.CreateChannelAsync();
 
         provisionTopology(_rabbitChannel);
     }
 
-    public void Publish<TMessage>(TMessage message, string exchange, string routingKey) where TMessage : class, IMessage
+    public async Task PublishAsync<TMessage>(TMessage message, string exchange, string routingKey) where TMessage : class, IMessage
     {
         var payload = _jsonSerializer.SerializeBinary(message);
-        _rabbitChannel.BasicPublish(exchange: exchange, routingKey: routingKey, basicProperties: null, body: payload);
+        await _rabbitChannel.BasicPublishAsync(exchange: exchange, routingKey: routingKey, body: payload);
     }
     
     public async Task<TMessage> ConsumeMessagesAsync<TMessage>(string queueName, int maxDelay = 1_000) where TMessage : IMessage
     {
         var taskCompletionSource = new TaskCompletionSource<TMessage>();
-        var consumer = new EventingBasicConsumer(_rabbitChannel);
+        var consumer = new AsyncEventingBasicConsumer(_rabbitChannel);
 
-        consumer.Received += (_, ea) =>
+        consumer.ReceivedAsync += async (_, ea) =>
         {
             var body = ea.Body.ToArray();
             var message = _jsonSerializer.DeserializeBinary<TMessage>(body);
             taskCompletionSource.SetResult(message);
         };
 
-        _rabbitChannel.BasicConsume(queue: queueName, autoAck: true, consumer: consumer);
+        await _rabbitChannel.BasicConsumeAsync(queue: queueName, autoAck: true, consumer: consumer);
 
         await Task.WhenAny(taskCompletionSource.Task, Task.Delay(maxDelay).ContinueWith(_ => taskCompletionSource.SetResult(default)));
         return taskCompletionSource.Task.Result;

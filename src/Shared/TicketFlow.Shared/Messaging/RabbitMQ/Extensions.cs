@@ -18,7 +18,7 @@ public static class Extensions
         var appName = registerer.Configuration.GetValue<string>("App:AppName");
         services.Configure<RabbitMqOptions>(section);
         
-        services.AddSingleton(svc =>
+        services.AddSingleton<Func<Task<ConnectionProvider>>>(svc =>
         {
             var options = new RabbitMqOptions();
             section.Bind(options);
@@ -31,11 +31,14 @@ public static class Extensions
                 Password = options.Password,
                 VirtualHost = options.VirtualHost
             };
-        
-            var consumerConnection = factory.CreateConnection($"{appName}-consumer");
-            var producerConnection = factory.CreateConnection($"{appName}-producer");
-            var connectionProvider = new ConnectionProvider(consumerConnection, producerConnection);
-            return connectionProvider;
+
+            return async () =>
+            {
+                var consumerConnection = await factory.CreateConnectionAsync($"{appName}-consumer");
+                var producerConnection = await factory.CreateConnectionAsync($"{appName}-producer");
+                var connectionProvider = new ConnectionProvider(consumerConnection, producerConnection);
+                return connectionProvider;
+            };
         });
         services.AddTransient<ChannelFactory>();
 

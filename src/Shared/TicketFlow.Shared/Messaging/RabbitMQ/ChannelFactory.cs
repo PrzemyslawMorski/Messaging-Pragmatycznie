@@ -4,23 +4,26 @@ using TicketFlow.Shared.App;
 
 namespace TicketFlow.Shared.Messaging.RabbitMQ;
 
-internal sealed class ChannelFactory(ConnectionProvider connectionProvider, IOptions<AppOptions> appOptions) : IDisposable
+internal sealed class ChannelFactory(Func<Task<ConnectionProvider>> createConnectionProvider) : IDisposable
 {
-    private readonly ThreadLocal<IModel> _consumerCache = new(true);
-    private readonly ThreadLocal<IModel> _producerCache = new(true);
+    private readonly ThreadLocal<IChannel> _consumerCache = new(true);
+    private readonly ThreadLocal<IChannel> _producerCache = new(true);
+    private ConnectionProvider? _connectionProvider;
 
-    public IModel CreateForProducer() => Create(connectionProvider.ProducerConnection, _producerCache);
+    public Task<IChannel> CreateForProducerAsync(CreateChannelOptions? options = null) => Create(x => x.ProducerConnection, _producerCache, options);
     
-    public IModel CreateForConsumer() => Create(connectionProvider.ConsumerConnection, _consumerCache);
+    public Task<IChannel> CreateForConsumerAsync(CreateChannelOptions? options = null) => Create(x => x.ProducerConnection, _consumerCache, options);
     
-    private IModel Create(IConnection connection, ThreadLocal<IModel> cache)
+    private async Task<IChannel> Create(Func<ConnectionProvider, IConnection> selectConnection, ThreadLocal<IChannel> cache, CreateChannelOptions? options = null)
     {
+        _connectionProvider ??= await createConnectionProvider();
+        
         if (cache.Value is not null)
         {
             return cache.Value;
         }
         
-        var channel = connection.CreateModel();
+        var channel = await selectConnection(_connectionProvider).CreateChannelAsync(options);
         cache.Value = channel;
         return channel;
     }

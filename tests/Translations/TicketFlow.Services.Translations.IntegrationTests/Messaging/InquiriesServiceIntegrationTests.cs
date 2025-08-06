@@ -29,12 +29,12 @@ public class InquiriesServiceIntegrationTests : IAsyncLifetime
     {
         await _messagingTestProvider.RabbitMqContainer.StartAsync();
 
-        _messagingTestProvider.Initialize(channel =>
+        await _messagingTestProvider.InitializeAsync(async channel =>
         {
-            channel.QueueDeclare(queue: IncomingQueue, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.ExchangeDeclare(exchange: Exchange, type: "topic", durable: false, autoDelete: false, arguments: null);
-            channel.QueueDeclare(queue: TestQueue, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.QueueBind(TestQueue, Exchange, routingKey: "#", arguments: null);
+            await channel.QueueDeclareAsync(queue: IncomingQueue, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            await channel.ExchangeDeclareAsync(exchange: Exchange, type: "topic", durable: false, autoDelete: false, arguments: null);
+            await channel.QueueDeclareAsync(queue: TestQueue, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            await channel.QueueBindAsync(TestQueue, Exchange, routingKey: "#", arguments: null);
         });
     }
 
@@ -53,7 +53,7 @@ public class InquiriesServiceIntegrationTests : IAsyncLifetime
         var message = new RequestTranslationV2("Test Text", "pl", Guid.NewGuid());
         
         var translationCompletedTask = _messagingTestProvider.ConsumeMessagesAsync<TranslationCompleted>(TestQueue, maxDelay: 10_000);
-        _messagingTestProvider.Publish(message, "", routingKey: IncomingQueue);
+        _messagingTestProvider.PublishAsync(message, "", routingKey: IncomingQueue);
         
         var translationCompleted = await translationCompletedTask;
         translationCompleted.Should().Match<TranslationCompleted>(msg => 
@@ -70,7 +70,7 @@ public class InquiriesServiceIntegrationTests : IAsyncLifetime
         var message = new RequestTranslationV2("Test Text", "pl", Guid.NewGuid());
         
         var translationCompletedTask = _messagingTestProvider.ConsumeMessagesAsync<TranslationSkipped>(TestQueue);
-        _messagingTestProvider.Publish(message, "", routingKey: IncomingQueue);
+        _messagingTestProvider.PublishAsync(message, "", routingKey: IncomingQueue);
         
         var translationCompleted = await translationCompletedTask;
         translationCompleted.Should().Match<TranslationSkipped>(msg => msg.ReferenceId == message.ReferenceId);

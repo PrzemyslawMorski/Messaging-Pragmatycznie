@@ -10,40 +10,43 @@ internal sealed class RabbitMqMessagePublisher(ChannelFactory channelFactory, IM
     ISerializer serializer, MessagePropertiesAccessor propertiesAccessor, ReliablePublishing reliablePublishing) : IMessagePublisher
 {
     public async Task PublishAsync<TMessage>(TMessage message, string? destination = default, string? routingKey = default, string? messageId = default,
-        IDictionary<string, object>? headers = default, CancellationToken cancellationToken = default) where TMessage : class,IMessage
+        IDictionary<string, object>? headers = default, CancellationToken cancellationToken = default) where TMessage : class, IMessage
     {
-        var channel = channelFactory.CreateForProducer();
+        var channelOptions = new CreateChannelOptions(
+            publisherConfirmationsEnabled: reliablePublishing.UsePublisherConfirms, 
+            publisherConfirmationTrackingEnabled: reliablePublishing.UsePublisherConfirms);
+        var channel = await channelFactory.CreateForProducerAsync(channelOptions);
         var payload = serializer.SerializeBinary(message);
-        var properties = CreateMessageProperties<TMessage>(channel, messageId, headers);
+        var properties = CreateMessageProperties<TMessage>(messageId, headers);
         SetPartitionKey(properties, message);
         
         var (conventionDestination, conventionRoutingKey) = conventionProvider.Get<TMessage>();
         
         ConfigureReliablePublishing<TMessage>(channel, messageId);
         
-        channel.BasicPublish(
+        await channel.BasicPublishAsync(
             exchange: destination ?? conventionDestination,
             routingKey: routingKey ?? conventionRoutingKey,
             basicProperties: properties,
             body: payload,
-            mandatory: reliablePublishing.ShouldPublishAsMandatory<TMessage>());
-
-        EnsureReliablePublish(channel);
-            
-        await Task.CompletedTask;
+            mandatory: reliablePublishing.ShouldPublishAsMandatory<TMessage>(),
+            cancellationToken: cancellationToken);
+        
+        
     }
 
-    private IBasicProperties CreateMessageProperties<TMessage>(IModel channel, string?  messageId = default, IDictionary<string, object>? headers = default)
+    private BasicProperties CreateMessageProperties<TMessage>(string?  messageId = default, IDictionary<string, object>? headers = default)
         where TMessage : class,IMessage
     {
         var messageProperties = propertiesAccessor.Get();
-        var basicProperties = channel.CreateBasicProperties();
+        var basicProperties = new BasicProperties
+        {
+            MessageId = messageId ?? Guid.NewGuid().ToString(),
+            Type = MessageTypeName.CreateFor<TMessage>(),
+            DeliveryMode = DeliveryModes.Persistent,
+            Headers = new Dictionary<string, object>()
+        };
 
-        basicProperties.MessageId = messageId ?? Guid.NewGuid().ToString();
-        basicProperties.Type = MessageTypeName.CreateFor<TMessage>();
-        basicProperties.DeliveryMode = 2;
-        basicProperties.Headers = new Dictionary<string, object>();
-        
         var headersToAdd = headers 
                            ?? messageProperties?.Headers 
                            ?? Enumerable.Empty<KeyValuePair<string, object>>();
@@ -56,35 +59,23 @@ internal sealed class RabbitMqMessagePublisher(ChannelFactory channelFactory, IM
         return basicProperties;
     }
 
-    private void ConfigureReliablePublishing<TMessage>(IModel channel, string? messageId)
+    private void ConfigureReliablePublishing<TMessage>(IChannel channel, string? messageId)
     {
         if (reliablePublishing.UsePublisherConfirms)
         {
-            channel.ConfirmSelect();
+            channel.BasicNacksAsync += async (s, args) =>
+            {
+                Console.WriteLine(
+                    $"Message {typeof(TMessage).Name}, id: {messageId} was not accepted by a broker!)");
+            };
         }
-
+        
         if (reliablePublishing.ShouldPublishAsMandatory<TMessage>())
         {
-            channel.BasicReturn += (s, args) =>
+            channel.BasicReturnAsync += async (s, args) =>
             {
                 Console.WriteLine($"Message {typeof(TMessage).Name}, id: {messageId} was not routed properly to any consumer!)");
             };
-        }
-    }
-    
-    private void EnsureReliablePublish(IModel channel)
-    {
-        if (reliablePublishing.UsePublisherConfirms)
-        {
-            try
-            {
-                channel.WaitForConfirmsOrDie();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                throw;
-            }
         }
     }
 

@@ -19,7 +19,7 @@
         <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.10.1" />
         <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.10.0" />
         <PackageReference Include="Polly.Core" Version="8.5.0" />
-        <PackageReference Include="RabbitMQ.Client" Version="6.8.1" /> 
+        <PackageReference Include="RabbitMQ.Client" Version="7.1.2" /> 
         <PackageReference Include="Scrutor" Version="5.0.3" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.0.1-preview.1.24570.5" />
         <PackageReference Include="Testcontainers.RabbitMq" Version="4.1.0" />
