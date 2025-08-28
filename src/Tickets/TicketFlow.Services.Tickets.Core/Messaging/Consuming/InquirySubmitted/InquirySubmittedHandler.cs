@@ -1,6 +1,8 @@
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.CourseUtils;
 using TicketFlow.Services.Tickets.Core.Data.Models;
 using TicketFlow.Services.Tickets.Core.Data.Repositories;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Messaging;
 
 namespace TicketFlow.Services.Tickets.Core.Messaging.Consuming.InquirySubmitted;
@@ -59,9 +61,9 @@ public sealed class InquirySubmittedHandler(ITicketsRepository repository, IMess
             Category: ticket.Category.ToString(),
             LanguageCode: ticket.LanguageCode);
         
-        await messagePublisher.PublishAsync(ticketCreatedMessage, cancellationToken: cancellationToken);
+        await PublishTicketCreated(cancellationToken, ticketCreatedMessage);
     }
-    
+
     private async Task HandleWithListenToYourself(InquirySubmitted message, CancellationToken cancellationToken)
     {
         var (id, name, email, title, description, category, languageCode, _) = message;
@@ -100,6 +102,12 @@ public sealed class InquirySubmittedHandler(ITicketsRepository repository, IMess
             Category: ticket.Category.ToString(),
             LanguageCode: ticket.LanguageCode);
         
+        await PublishTicketCreated(cancellationToken, ticketCreatedMessage);
+    }
+    
+    [Operation(Conventions.Operation.PublishPrefix + "TicketCreated", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "TicketCreated", Description = "Notify that ticket was created")]
+    private async Task PublishTicketCreated(CancellationToken cancellationToken, Publishing.TicketCreated ticketCreatedMessage)
+    {
         await messagePublisher.PublishAsync(ticketCreatedMessage, cancellationToken: cancellationToken);
     }
 }

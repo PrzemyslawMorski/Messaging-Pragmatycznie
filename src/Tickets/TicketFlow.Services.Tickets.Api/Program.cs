@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Neuroglia.AsyncApi;
 using TicketFlow.Services.Tickets.Api.DTO;
 using TicketFlow.Services.Tickets.Core;
 using TicketFlow.Services.Tickets.Core.Commands.AddClientCommentsToTicket;
@@ -15,6 +16,7 @@ using TicketFlow.Services.Tickets.Core.Queries.ListTickets;
 using TicketFlow.Services.Tickets.Core.SynchronousIntegration;
 using TicketFlow.Shared.AnomalyGeneration.HttpApi;
 using TicketFlow.Shared.AspNetCore;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Commands;
 using TicketFlow.Shared.Exceptions;
 using TicketFlow.Shared.Queries;
@@ -22,7 +24,8 @@ using TicketFlow.Shared.Queries;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddCore(builder.Configuration)
-    .AddApiForFrontendConfigured();
+    .AddApiForFrontendConfigured()
+    .AddDocumentation();
 
 var app = builder.Build();
 
@@ -146,4 +149,7 @@ app.MapGet("/users/{id}", async (
 });
 
 app.UseExceptions();
+
+app.UseDocumentation();
+
 app.Run();

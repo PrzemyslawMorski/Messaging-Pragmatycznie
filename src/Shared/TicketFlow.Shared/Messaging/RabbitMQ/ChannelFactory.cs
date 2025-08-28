@@ -32,14 +32,14 @@ internal sealed class ChannelFactory(Func<Task<ConnectionProvider>> createConnec
     {
         foreach (var channel in _consumerCache.Values)
         {
-            channel.Dispose();
+            channel?.Dispose();
         }
         foreach (var channel in _producerCache.Values)
         {
-            channel.Dispose();
+            channel?.Dispose();
         }
         
-        _consumerCache.Dispose();
-        _producerCache.Dispose();
+        _consumerCache?.Dispose();
+        _producerCache?.Dispose();
     }
 }

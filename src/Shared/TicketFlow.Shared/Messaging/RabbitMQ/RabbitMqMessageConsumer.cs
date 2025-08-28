@@ -3,8 +3,13 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Neuroglia;
+using Neuroglia.AsyncApi.Bindings;
+using Neuroglia.AsyncApi.Bindings.Amqp;
+using Neuroglia.AsyncApi.v3;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Messaging.Partitioning;
 using TicketFlow.Shared.Messaging.Resiliency;
 using TicketFlow.Shared.Messaging.Topology;
@@ -22,7 +27,8 @@ internal sealed class RabbitMqMessageConsumer(
     ILogger<RabbitMqMessageConsumer> logger,
     TopologyReadinessAccessor topologyReadinessAccessor,
     ReliableConsuming reliableConsuming,
-    ResiliencyOptions resiliencyOptions) : IMessageConsumer
+    ResiliencyOptions resiliencyOptions,
+    TopologyDescription topologyDescription) : IMessageConsumer
 {
     public async Task<IMessageConsumer> ConsumeMessage<TMessage>(
         Func<TMessage, Task>? handle = default, 
@@ -61,6 +67,8 @@ internal sealed class RabbitMqMessageConsumer(
             
             await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
         };
+
+        RegisterForAsyncApi<TMessage>(acceptedMessageTypes, destinationResolved);
 
         await EnsureTopologyReady(cancellationToken);
         
@@ -103,6 +111,7 @@ internal sealed class RabbitMqMessageConsumer(
             await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
         };
 
+        RegisterForAsyncApi(acceptedMessageTypes, destinationResolved);
         await EnsureTopologyReady(cancellationToken);
         
         await channel.BasicConsumeAsync(queue: queue, autoAck: false, consumer: consumer, cancellationToken);
@@ -116,10 +125,11 @@ internal sealed class RabbitMqMessageConsumer(
     {
         var channel = await channelFactory.CreateForConsumerAsync();
         var (destination, _) = conventionProvider.Get<TMessage>();
+        var destinationResolved = queue ?? destination;
 
         await EnsureTopologyReady(cancellationToken);
         
-        var result = await channel.BasicGetAsync(queue: queue ?? destination, autoAck: false, cancellationToken);
+        var result = await channel.BasicGetAsync(queue: destinationResolved, autoAck: false, cancellationToken);
         if (result is null)
         {
             return;
@@ -339,4 +349,124 @@ internal sealed class RabbitMqMessageConsumer(
             await Task.Delay(1000, cancellationToken);
         }
     }
+    
+    #region AsyncAPI
+    private void RegisterForAsyncApi<TMessage>(string[]? acceptedMessageTypes, string queue) where TMessage : class, IMessage
+    {
+        foreach (var messageType in (acceptedMessageTypes ?? []).Concat([ typeof(TMessage).Name ]))
+        {
+            topologyDescription.AddChannel(Conventions.Channel.Name(messageType),
+                new V3ChannelDefinition
+                {
+                    Bindings = new ChannelBindingDefinitionCollection()
+                    {
+                        Amqp = new AmqpChannelBindingDefinition
+                        {
+                            Queue = new AmqpQueueDefinition { Name = queue },
+                            Type = AmqpChannelType.Queue,
+                            BindingVersion = "0.3.0"
+                        }
+                    },
+                    Messages = new EquatableDictionary<string, V3MessageDefinition>
+                    {
+                        [messageType] = new V3MessageDefinition
+                        {
+                            Bindings = new MessageBindingDefinitionCollection
+                            {
+                                Amqp = new AmqpMessageBindingDefinition
+                                {
+                                    MessageType = messageType,
+                                    BindingVersion = "0.3.0"
+                                }
+                            }
+                        }
+                    }
+                });
+            
+            topologyDescription.AddOperation(
+                Conventions.Operation.Consume(messageType),
+                new V3OperationDefinition
+                {
+                    Action = V3OperationAction.Receive,
+                    Bindings = new OperationBindingDefinitionCollection
+                    {
+                        Amqp = new AmqpOperationBindingDefinition
+                        {
+                            BindingVersion = "0.3.0"
+                        }
+                    },
+                    Messages =
+                    [
+                        new()
+                        {
+                            Reference = Conventions.Ref.ChannelMessage(Conventions.Channel.Name(messageType), messageType)
+                        }
+                    ],
+                    Channel = new V3ReferenceDefinition
+                    {
+                        Reference = Conventions.Ref.Channel(messageType)
+                    }
+                });
+        }
+    }
+    
+    private void RegisterForAsyncApi(string[]? acceptedMessageTypes, string queue)
+    {
+        foreach (var messageType in acceptedMessageTypes ?? [])
+        {
+            topologyDescription.AddChannel(Conventions.Channel.Name(messageType),
+                new V3ChannelDefinition
+                {
+                    Bindings = new ChannelBindingDefinitionCollection()
+                    {
+                        Amqp = new AmqpChannelBindingDefinition
+                        {
+                            Queue = new AmqpQueueDefinition { Name = queue },
+                            Type = AmqpChannelType.Queue,
+                            BindingVersion = "0.3.0"
+                        }
+                    },
+                    Messages = new EquatableDictionary<string, V3MessageDefinition>
+                    {
+                        [messageType] = new V3MessageDefinition
+                        {
+                            Bindings = new MessageBindingDefinitionCollection
+                            {
+                                Amqp = new AmqpMessageBindingDefinition
+                                {
+                                    MessageType = messageType,
+                                    BindingVersion = "0.3.0"
+                                }
+                            }
+                        }
+                    }
+                });
+            
+            topologyDescription.AddOperation(
+                Conventions.Operation.Consume(messageType),
+                new V3OperationDefinition
+                {
+                    Action = V3OperationAction.Receive,
+                    Bindings = new OperationBindingDefinitionCollection
+                    {
+                        Amqp = new AmqpOperationBindingDefinition
+                        {
+                            BindingVersion = "0.3.0"
+                        }
+                    },
+                    Messages =
+                    [
+                        new()
+                        {
+                            Reference = Conventions.Ref.ChannelMessage(Conventions.Channel.Name(messageType), messageType)
+                        }
+                    ],
+                    Channel = new V3ReferenceDefinition
+                    {
+                        Reference = Conventions.Ref.Channel(messageType)
+                    }
+                });
+        }
+    }
+    #endregion
 }

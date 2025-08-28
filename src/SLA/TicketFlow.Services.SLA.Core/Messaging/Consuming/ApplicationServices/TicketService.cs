@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.Services.SLA.Core.Data.Models;
 using TicketFlow.Services.SLA.Core.Data.Repositories;
 using TicketFlow.Services.SLA.Core.Http.Tickets;
 using TicketFlow.Services.SLA.Core.Messaging.Publishing;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Exceptions;
 using TicketFlow.Shared.Messaging;
 
@@ -68,12 +70,7 @@ public class TicketService
                 deadlineReminders.ServiceLastKnownVersion = version;
                 await _slaRepository.SaveReminders(deadlineReminders, cancellationToken);
 
-                await _publisher.PublishAsync(
-                    new DeadlinesCalculated(
-                        deadlineReminders.ServiceType,
-                        deadlineReminders.ServiceSourceId,
-                        deadlineReminders.DeadlineDateUtc),
-                    cancellationToken: cancellationToken);
+                await PublishDeadlinesCalculated(cancellationToken, deadlineReminders);
             }
         }
         else // We unblocked the ticket or reopened it
@@ -82,6 +79,17 @@ public class TicketService
             existingReminders.ServiceLastKnownVersion = version;
             await _slaRepository.SaveReminders(existingReminders, cancellationToken);
         }
+    }
+
+    [Operation(Conventions.Operation.PublishPrefix + "DeadlinesCalculated", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "DeadlinesCalculated", Description = "Notify that deadlines were calculated")]
+    private async Task PublishDeadlinesCalculated(CancellationToken cancellationToken, DeadlineReminders deadlineReminders)
+    {
+        await _publisher.PublishAsync(
+            new DeadlinesCalculated(
+                deadlineReminders.ServiceType,
+                deadlineReminders.ServiceSourceId,
+                deadlineReminders.DeadlineDateUtc),
+            cancellationToken: cancellationToken);
     }
 
     public async Task HandleAgentAssignedAsync(Guid ticketId, int version, CancellationToken cancellationToken = default)

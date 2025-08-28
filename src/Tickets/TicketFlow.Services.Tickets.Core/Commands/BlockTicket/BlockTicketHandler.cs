@@ -1,7 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.Services.Tickets.Core.Data.Models;
 using TicketFlow.Services.Tickets.Core.Data.Repositories;
 using TicketFlow.Services.Tickets.Core.Messaging.Publishing;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Commands;
 using TicketFlow.Shared.Exceptions;
 using TicketFlow.Shared.Messaging;
@@ -27,11 +30,13 @@ public class BlockTicketHandler(ITicketsRepository repository, IMessagePublisher
         logger.LogInformation($"Ticket with id {ticket.Id} is now blocked.");
     }
 
+    [Operation(Conventions.Operation.PublishPrefix + "TicketBlocked", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "TicketBlocked", Description = "Notify that ticket was blocked")]
     private async Task PublishTicketBlocked(BlockTicket command, CancellationToken cancellationToken, Ticket ticket)
     {
         var ticketStatusChangedMessage = new TicketBlocked(command.TicketId, ticket.Version);
         await publisher.PublishAsync(
-            message: ticketStatusChangedMessage, 
+            message: ticketStatusChangedMessage,
+            destination: "tickets-exchange",
             routingKey: "ticket-blocked", 
             cancellationToken: cancellationToken);
     }

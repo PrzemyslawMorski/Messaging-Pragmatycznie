@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.Services.SystemMetrics.Generator.Data;
 using TicketFlow.Shared.App;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Messaging;
 using TicketFlow.Shared.Messaging.Topology;
 
@@ -48,14 +50,20 @@ public class RandomMetricsPublisher : BackgroundService
             var tick = MetricsGenerator.GenerateTickForService(_appOptions.Value.AppName);
             if (tick != null)
             {
-                await publisher.PublishAsync(
-                    tick, 
-                    destination: MetricsExchange, 
-                    routingKey: "metric." + _appOptions.Value.AppName, 
-                    cancellationToken: stoppingToken);
+                await PublishMetricTick(stoppingToken, publisher, tick);
             }
 
             await Task.Delay(2000, cancellationToken: stoppingToken);
         }
+    }
+
+    [Operation(Conventions.Operation.PublishPrefix + "MetricTick", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "MetricTick", Description = "Notify that metric tick was generated")]
+    private async Task PublishMetricTick(CancellationToken stoppingToken, IMessagePublisher? publisher, MetricTick tick)
+    {
+        await publisher.PublishAsync(
+            tick, 
+            destination: MetricsExchange, 
+            routingKey: "metric." + _appOptions.Value.AppName, 
+            cancellationToken: stoppingToken);
     }
 }

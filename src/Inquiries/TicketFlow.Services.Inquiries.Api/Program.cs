@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Neuroglia.AsyncApi;
 using TicketFlow.CourseUtils;
 using TicketFlow.Services.Inquiries.Core;
 using TicketFlow.Services.Inquiries.Core.Commands.SubmitInquiry;
@@ -6,13 +7,15 @@ using TicketFlow.Services.Inquiries.Core.Commands.SubmitInquirySynchronously;
 using TicketFlow.Services.Inquiries.Core.Queries;
 using TicketFlow.Shared.AnomalyGeneration.HttpApi;
 using TicketFlow.Shared.AspNetCore;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Commands;
 using TicketFlow.Shared.Queries;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddCore(builder.Configuration)
-    .AddApiForFrontendConfigured();
+    .AddApiForFrontendConfigured()
+    .AddDocumentation();
 
 var app = builder.Build();
 
@@ -54,6 +57,17 @@ app.MapPost("/inquiries/submit-sync", async ([FromBody] SubmitInquirySynchronous
     return Results.Ok();
 });
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options => // UseSwaggerUI is called only in Development.
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
+        options.RoutePrefix = string.Empty;
+    });
+}
+
+app.UseDocumentation();
 app.Run();
 
 public partial class Program { }

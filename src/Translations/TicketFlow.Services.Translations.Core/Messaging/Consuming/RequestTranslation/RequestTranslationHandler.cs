@@ -1,5 +1,7 @@
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.Services.Translations.Core.Messaging.Publishing;
 using TicketFlow.Services.Translations.Core.Translations;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Messaging;
 
 namespace TicketFlow.Services.Translations.Core.Messaging.Consuming.RequestTranslation;
@@ -20,11 +22,25 @@ internal sealed class RequestTranslationHandler(ITranslationsService translation
         if (string.IsNullOrWhiteSpace(translatedText))
         {
             var translationSkippedMessage = new TranslationSkipped(text, referenceId);
-            await messagePublisher.PublishAsync(translationSkippedMessage, destination: "translation-completed-exchange", cancellationToken: cancellationToken);
+            await PublishTranslationSkipped(cancellationToken, translationSkippedMessage);
             return;
         }
         
         var translationCompletedMessage = new TranslationCompleted(text, translatedText, referenceId);
+        await PublishTranslationCompleted(cancellationToken, translationCompletedMessage);
+    }
+
+    [Operation(Conventions.Operation.PublishPrefix + "TranslationCompleted", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "TranslationCompleted", Description = "Notify that translation was completed")]
+    private async Task PublishTranslationCompleted(CancellationToken cancellationToken,
+        TranslationCompleted translationCompletedMessage)
+    {
         await messagePublisher.PublishAsync(translationCompletedMessage, destination: "translation-completed-exchange", cancellationToken: cancellationToken);
+    }
+
+    [Operation(Conventions.Operation.PublishPrefix + "TranslationSkipped", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "TranslationSkipped", Description = "Notify that translation was skipped")]
+    private async Task PublishTranslationSkipped(CancellationToken cancellationToken,
+        TranslationSkipped translationSkippedMessage)
+    {
+        await messagePublisher.PublishAsync(translationSkippedMessage, destination: "translation-completed-exchange", cancellationToken: cancellationToken);
     }
 }

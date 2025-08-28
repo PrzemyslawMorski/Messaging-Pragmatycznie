@@ -1,14 +1,20 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TicketFlow.Services.SystemMetrics.Generator.Data;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Messaging;
 
 namespace TicketFlow.Services.SystemMetrics.Core.LiveMetrics;
 
-public class LiveMetricsPullService(IMessageConsumer messageConsumer, LiveMetricsHub hub, LiveMetricsOptions opts) : BackgroundService
+public class LiveMetricsPullService(
+    IMessageConsumer messageConsumer,
+    LiveMetricsHub hub,
+    LiveMetricsOptions opts,
+    TopologyDescription topologyDescription) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        topologyDescription.MarkConsumersRegistered(); //Only for AsyncAPI to finish describing; below get is not mapped (challenge yourself 😉)
         while (!stoppingToken.IsCancellationRequested)
         {
             try

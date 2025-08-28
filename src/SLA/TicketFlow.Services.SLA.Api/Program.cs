@@ -1,14 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Neuroglia.AsyncApi;
+using Neuroglia.AsyncApi.Generation;
 using TicketFlow.Services.SLA.Core;
 using TicketFlow.Services.SLA.Core.Data.Models;
 using TicketFlow.Services.SLA.Core.Data.Repositories;
 using TicketFlow.Shared.AnomalyGeneration.HttpApi;
 using TicketFlow.Shared.AspNetCore;
+using TicketFlow.Shared.AsyncAPI;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddCore(builder.Configuration)
-    .AddApiForFrontendConfigured();
+    .AddApiForFrontendConfigured()
+    .AddDocumentation();
 
 var app = builder.Build();
 
@@ -36,5 +41,7 @@ app.MapGet("/sla/{serviceType}/{serviceSourceId}/deadline-reminders", async (
 
 app.ExposeApiForFrontend();
 app.UseAnomalyEndpoints();
+
+app.UseDocumentation();
 
 app.Run();

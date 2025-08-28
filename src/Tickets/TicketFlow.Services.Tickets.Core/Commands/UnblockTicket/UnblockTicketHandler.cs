@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.CourseUtils;
 using TicketFlow.Services.Tickets.Core.Data.Models;
 using TicketFlow.Services.Tickets.Core.Data.Repositories;
 using TicketFlow.Services.Tickets.Core.Messaging.Publishing;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Commands;
 using TicketFlow.Shared.Exceptions;
 using TicketFlow.Shared.Messaging;
@@ -28,6 +30,7 @@ public class UnblockTicketHandler(ITicketsRepository repository, IMessagePublish
         logger.LogInformation($"Ticket with id {ticket.Id} is now unblocked.");
     }
     
+    [Operation(Conventions.Operation.PublishPrefix + "TicketQualified", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "TicketQualified", Description = "Notify that ticket was unblocked")]
     private async Task PublishTicketUnblocked(Ticket ticket, CancellationToken cancellationToken)
     {
         var ticketStatusChanged = new TicketQualified(ticket.Id, ticket.Version);

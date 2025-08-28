@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Logging;
+using Neuroglia.AsyncApi.v3;
 using TicketFlow.CourseUtils;
 using TicketFlow.Services.Tickets.Core.Data.Models;
 using TicketFlow.Services.Tickets.Core.Data.Repositories;
 using TicketFlow.Services.Tickets.Core.Messaging.Publishing;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Commands;
 using TicketFlow.Shared.Exceptions;
 using TicketFlow.Shared.Messaging;
@@ -28,6 +30,7 @@ internal sealed class ResolveTicketHandler(ITicketsRepository repository, IMessa
         logger.LogInformation($"Ticket with id {ticket.Id} has been resolved.");
     }
 
+    [Operation(Conventions.Operation.PublishPrefix + "TicketResolved", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "TicketResolved", Description = "Notify that ticket was resolved")]
     private async Task PublishTicketResolved(ResolveTicket command, CancellationToken cancellationToken, Ticket ticket)
     {
         var ticketStatusChanged = new TicketResolved(command.TicketId, ticket.Version);

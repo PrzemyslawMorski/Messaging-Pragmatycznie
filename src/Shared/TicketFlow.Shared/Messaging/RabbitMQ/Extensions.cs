@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.DependencyInjection;
 using TicketFlow.Shared.Messaging.Topology;
 
@@ -50,6 +51,10 @@ public static class Extensions
         services.AddSingleton(provider => new TopologyOptions(
             CreateTopology: provider.GetRequiredService<IOptions<RabbitMqOptions>>().Value.CreateTopology));
         services.AddHostedService<RabbitMqTopologyInitializer>();
+        
+        services.AddSingleton<TopologyDescription>();
+        services.AddHostedService<AsyncApiBuilder>();
+        
         return registerer;
     }
 

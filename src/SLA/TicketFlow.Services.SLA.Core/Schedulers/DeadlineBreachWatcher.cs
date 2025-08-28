@@ -1,8 +1,11 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Neuroglia.AsyncApi.v3;
+using TicketFlow.Services.SLA.Core.Data.Models;
 using TicketFlow.Services.SLA.Core.Data.Repositories;
 using TicketFlow.Services.SLA.Core.Http.Communication;
 using TicketFlow.Services.SLA.Core.Messaging.Publishing;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Messaging;
 
 namespace TicketFlow.Services.SLA.Core.Schedulers;
@@ -46,7 +49,7 @@ public class DeadlineBreachWatcher(
             {
                 deadline.MarkDeadlineBreachAlertSent();
                 /* Explicit decision to use CancellationToken.None - email was already sent so it's better to "force save" */
-                await messagePublisher.PublishAsync(new SLABreached(deadline.ServiceType, deadline.ServiceSourceId), cancellationToken: CancellationToken.None);
+                await PublishSLABreached(messagePublisher, deadline);
 
                 if (deadline.UserIdToRemind.HasValue)
                 {
@@ -63,5 +66,11 @@ public class DeadlineBreachWatcher(
         }
 
         await Task.CompletedTask;
+    }
+
+    [Operation(Conventions.Operation.PublishPrefix + "SLABreached", V3OperationAction.Send, Conventions.Ref.ChannelPrefix + "SLABreached", Description = "Notify that SLA was breached")]
+    private static async Task PublishSLABreached(IMessagePublisher messagePublisher, DeadlineReminders deadline)
+    {
+        await messagePublisher.PublishAsync(new SLABreached(deadline.ServiceType, deadline.ServiceSourceId), cancellationToken: CancellationToken.None);
     }
 }

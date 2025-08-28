@@ -7,12 +7,14 @@ using TicketFlow.Services.Communication.Core.Data.Models;
 using TicketFlow.Services.Communication.Core.Validators;
 using TicketFlow.Shared.AnomalyGeneration.HttpApi;
 using TicketFlow.Shared.AspNetCore;
+using TicketFlow.Shared.AsyncAPI;
 using TicketFlow.Shared.Exceptions;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddCore(builder.Configuration)
-    .AddApiForFrontendConfigured();
+    .AddApiForFrontendConfigured()
+    .AddDocumentation();
 
 var app = builder.Build();
 
@@ -129,4 +131,5 @@ app.MapPost("/messages", async (
     return Results.Ok();
 });
 
+app.UseDocumentation();
 app.Run();
