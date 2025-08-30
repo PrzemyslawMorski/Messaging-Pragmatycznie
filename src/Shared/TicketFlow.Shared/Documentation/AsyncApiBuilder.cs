@@ -62,9 +62,9 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
             .WithTitle($"TicketFlow - {appSettings.Value.AppName}")
             .WithVersion("1.0.0");
 
-        RegisterMessages(v3);
-        RegisterConsumerSide(topologyDescription!, v3);
-        RegisterPublisherSide(v3);
+        var messageConfigurations = RegisterMessages(v3);
+        RegisterConsumerSide(topologyDescription!, v3, messageConfigurations);
+        RegisterPublisherSide(v3, messageConfigurations);
 
         var document = builder.Build();
         _documents.Add(document);
@@ -72,8 +72,10 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
         return Task.CompletedTask;
     }
 
-    private static void RegisterConsumerSide(TopologyDescription topologyDescription, IV3AsyncApiDocumentBuilder v3)
+    private static void RegisterConsumerSide(TopologyDescription topologyDescription, IV3AsyncApiDocumentBuilder v3,
+        Dictionary<string, Action<IV3MessageDefinitionBuilder>> messageConfigurations)
     {
+        
         foreach (var channel in topologyDescription!.Channels)
         {
             v3.WithChannel(Conventions.Channel.Name(channel.Key), setup =>
@@ -87,6 +89,12 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
                 {
                     setup.WithMessage(message.Key, msgSetup =>
                     {
+                        var hasMatchingConfig = messageConfigurations.TryGetValue(message.Key, out var config);
+                        if (hasMatchingConfig)
+                        {
+                            config!(msgSetup);
+                        }
+                        
                         foreach (var binding in (message.Value.Bindings ?? new MessageBindingDefinitionCollection())
                                  .AsEnumerable())
                         {
@@ -116,7 +124,7 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
         }
     }
     
-    private static void RegisterPublisherSide(IV3AsyncApiDocumentBuilder v3)
+    private static void RegisterPublisherSide(IV3AsyncApiDocumentBuilder v3, Dictionary<string, Action<IV3MessageDefinitionBuilder>> messageConfigurations)
     {
         var callingAssembly = Assembly.GetEntryAssembly();
         var ownedReferencedAssemblies = callingAssembly.GetReferencedAssemblies()
@@ -142,7 +150,14 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
                     
                     v3.WithChannel(channelName, setup =>
                     {
-                        setup.WithMessage(messageName, msgSetup => { });
+                        setup.WithMessage(messageName, msgSetup =>
+                        {
+                            var hasMatchingConfig = messageConfigurations.TryGetValue(messageName, out var config);
+                            if (hasMatchingConfig)
+                            {
+                                config!(msgSetup);
+                            }
+                        });
                     });
                     
                     v3.WithOperation(operationAttribute.Name, setup =>
@@ -157,7 +172,7 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
         }
     }
 
-    private static void RegisterMessages(IV3AsyncApiDocumentBuilder v3)
+    private static Dictionary<string, Action<IV3MessageDefinitionBuilder>> RegisterMessages(IV3AsyncApiDocumentBuilder v3)
     {
         var callingAssembly = Assembly.GetEntryAssembly();
         var ownedReferencedAssemblies = callingAssembly.GetReferencedAssemblies()
@@ -168,17 +183,31 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
         var types = new[] { callingAssembly }.Concat(ownedReferencedAssemblies)
             .Select(x => x.GetTypes())
             .SelectMany(x => x);
+
+        var messageConfigurations = new Dictionary<string, Action<IV3MessageDefinitionBuilder>>();
         
         foreach (var type in types
                     .Where(t => typeof(IMessage).IsAssignableFrom(t))
                     .Where(t => t.IsAbstract is false && t.IsInterface is false)
                     .Where(t => t.ContainsGenericParameters is false))
         {
-            v3.WithMessageComponent(type.Name, message => message
-                .WithPayloadSchema(schema => schema
-                    .WithJsonSchema(jsonSchema => jsonSchema
-                        .FromType(type, JsonSchemaGeneratorConfiguration.Default))));
+            v3.WithMessageComponent(type.Name, message =>
+            {
+                var messageConfig = (IV3MessageDefinitionBuilder msg) =>
+                {
+                    msg.WithPayloadSchema(schema => schema
+                        .WithJsonSchema(jsonSchema => jsonSchema
+                        .FromType(type, JsonSchemaGeneratorConfiguration.Default)));
+                    msg.WithName(type.Name);
+                    msg.WithTitle(type.Name);
+                };
+
+                messageConfig(message);
+                messageConfigurations.Add(type.Name, messageConfig);
+            });
         }
+
+        return messageConfigurations;
     }
 
     public IEnumerator<IAsyncApiDocument> GetEnumerator()
