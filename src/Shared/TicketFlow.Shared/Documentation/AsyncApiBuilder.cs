@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using Json.Schema.Generation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -60,7 +61,8 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
             .UsingAsyncApiV3()
             .WithTitle($"TicketFlow - {appSettings.Value.AppName}")
             .WithVersion("1.0.0");
-        
+
+        RegisterMessages(v3);
         RegisterConsumerSide(topologyDescription!, v3);
         RegisterPublisherSide(v3);
 
@@ -152,6 +154,30 @@ public class AsyncApiBuilder(IServiceProvider serviceProvider) : BackgroundServi
                     });
                 }
             }
+        }
+    }
+
+    private static void RegisterMessages(IV3AsyncApiDocumentBuilder v3)
+    {
+        var callingAssembly = Assembly.GetEntryAssembly();
+        var ownedReferencedAssemblies = callingAssembly.GetReferencedAssemblies()
+            .Where(x => x.Name.StartsWith("TicketFlow"))
+            .Select(Assembly.Load)
+            .ToList();
+        
+        var types = new[] { callingAssembly }.Concat(ownedReferencedAssemblies)
+            .Select(x => x.GetTypes())
+            .SelectMany(x => x);
+        
+        foreach (var type in types
+                    .Where(t => typeof(IMessage).IsAssignableFrom(t))
+                    .Where(t => t.IsAbstract is false && t.IsInterface is false)
+                    .Where(t => t.ContainsGenericParameters is false))
+        {
+            v3.WithMessageComponent(type.Name, message => message
+                .WithPayloadSchema(schema => schema
+                    .WithJsonSchema(jsonSchema => jsonSchema
+                        .FromType(type, JsonSchemaGeneratorConfiguration.Default))));
         }
     }
 

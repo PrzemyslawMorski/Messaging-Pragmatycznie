@@ -47,27 +47,27 @@ export default {
       licenseKey: '9JXD-JUG4-H4H3-EDSC-VTG6-LN6X', // FIX ME!
       services: [
         { 
-          path: "http://localhost:5148/asyncapi/asyncapi.json", 
+          path: "http://localhost:5148/asyncapi/asyncapi.yaml", 
           id: "Communication Service"
         },
         { 
-          path: "http://localhost:5011/asyncapi/asyncapi.json", 
+          path: "http://localhost:5011/asyncapi/asyncapi.yaml", 
           id: "Inquiries Service"
         },
         { 
-          path: "http://localhost:5054/asyncapi/asyncapi.json", 
+          path: "http://localhost:5054/asyncapi/asyncapi.yaml", 
           id: "SLA Service"
         },
         { 
-          path: "http://localhost:5231/asyncapi/asyncapi.json", 
+          path: "http://localhost:5231/asyncapi/asyncapi.yaml", 
           id: "Metrics Service"
         },
         { 
-          path: "http://localhost:5274/asyncapi/asyncapi.json", 
+          path: "http://localhost:5274/asyncapi/asyncapi.yaml", 
           id: "Translation Service"
         },
         { 
-          path: "http://localhost:5112/asyncapi/asyncapi.json", 
+          path: "http://localhost:5112/asyncapi/asyncapi.yaml", 
           id: "Tickets Service"
         },
       ],
