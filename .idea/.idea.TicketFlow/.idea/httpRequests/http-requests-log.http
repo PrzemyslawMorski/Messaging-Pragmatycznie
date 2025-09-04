@@ -83,6 +83,23 @@ Accept: */*
 
 ###
 
+POST http://localhost:5011/inquiries/submit
+Content-Type: application/json
+Content-Length: 136
+User-Agent: IntelliJ HTTP Client/JetBrains Rider 2025.1.4
+Accept-Encoding: br, deflate, gzip, x-gzip
+Accept: */*
+
+{
+  "name": "John Doe",
+  "email": "user@test.com",
+  "category": "general",
+  "title" : "Help",
+  "description": "Hi, got an issue:/"
+}
+
+###
+
 POST http://localhost:5011/inquiries/submit-sync
 Content-Type: application/json
 Content-Length: 136
