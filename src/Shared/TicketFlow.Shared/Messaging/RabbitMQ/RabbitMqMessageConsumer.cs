@@ -275,7 +275,8 @@ internal sealed class RabbitMqMessageConsumer(
     {
         var messageId = props.MessageId;
         var headers = props.Headers?
-            .Select(x => (x.Key, (object)Encoding.UTF8.GetString((byte[]) x.Value))).ToDictionary();
+            .Select(x => (x.Key, x.Value is long ? x.Value.ToString() : (object)Encoding.UTF8.GetString((byte[]) x.Value))).ToDictionary();
+            
         var messageType = props.Type;
         var messageProperties = new MessageProperties(messageId, headers, messageType, redelivered);
         messagePropertiesAccessor.Set(messageProperties);

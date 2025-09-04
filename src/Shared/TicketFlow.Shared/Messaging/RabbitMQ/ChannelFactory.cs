@@ -12,7 +12,7 @@ internal sealed class ChannelFactory(Func<Task<ConnectionProvider>> createConnec
 
     public Task<IChannel> CreateForProducerAsync(CreateChannelOptions? options = null) => Create(x => x.ProducerConnection, _producerCache, options);
     
-    public Task<IChannel> CreateForConsumerAsync(CreateChannelOptions? options = null) => Create(x => x.ProducerConnection, _consumerCache, options);
+    public Task<IChannel> CreateForConsumerAsync(CreateChannelOptions? options = null) => Create(x => x.ConsumerConnection, _consumerCache, options);
     
     private async Task<IChannel> Create(Func<ConnectionProvider, IConnection> selectConnection, ThreadLocal<IChannel> cache, CreateChannelOptions? options = null)
     {

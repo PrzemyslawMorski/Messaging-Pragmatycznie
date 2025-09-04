@@ -1,0 +1,38 @@
+System.Net.Http.HttpRequestException: Connection refused (localhost:5112)
+ ---> System.Net.Sockets.SocketException (61): Connection refused
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.System.Threading.Tasks.Sources.IValueTaskSource.GetResult(Int16 token)
+   at System.Net.Sockets.Socket.<ConnectAsync>g__WaitForConnectWithCancellation|285_0(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.InjectNewHttp11ConnectionAsync(QueueItem queueItem)
+   at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.DiagnosticsHandler.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.Extensions.Http.Logging.LoggingHttpMessageHandler.<SendCoreAsync>g__Core|4_0(HttpRequestMessage request, Boolean useAsync, CancellationToken cancellationToken)
+   at Microsoft.Extensions.Http.Logging.LoggingScopeHttpMessageHandler.<SendCoreAsync>g__Core|4_0(HttpRequestMessage request, Boolean useAsync, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at TicketFlow.Services.Inquiries.Core.Commands.SubmitInquirySynchronously.SubmitInquirySynchronouslyHandler.HandleAsync(SubmitInquirySynchronously command, CancellationToken cancellationToken) in /Users/goorion/Repos/DevMentors/Messaging-Final-V2/src/Inquiries/TicketFlow.Services.Inquiries.Core/Commands/SubmitInquirySynchronously/SubmitInquirySynchronouslyHandler.cs:line 55
+   at TicketFlow.Shared.Messaging.Executor.CommandHandlerExecutorDecorator`1.<>c__DisplayClass3_0.<<HandleAsync>b__0>d.MoveNext() in /Users/goorion/Repos/DevMentors/Messaging-Final-V2/src/Shared/TicketFlow.Shared/Messaging/Executor/CommandHandlerExecutorDecorator.cs:line 10
+--- End of stack trace from previous location ---
+   at TicketFlow.Shared.Messaging.Executor.MessageExecutor.ExecuteAsync(Func`1 handle, CancellationToken cancellationToken) in /Users/goorion/Repos/DevMentors/Messaging-Final-V2/src/Shared/TicketFlow.Shared/Messaging/Executor/MessageExecutor.cs:line 27
+   at TicketFlow.Shared.Messaging.Executor.CommandHandlerExecutorDecorator`1.HandleAsync(TCommand command, CancellationToken cancellationToken) in /Users/goorion/Repos/DevMentors/Messaging-Final-V2/src/Shared/TicketFlow.Shared/Messaging/Executor/CommandHandlerExecutorDecorator.cs:line 10
+   at Program.<>c.<<<Main>$>b__0_3>d.MoveNext() in /Users/goorion/Repos/DevMentors/Messaging-Final-V2/src/Inquiries/TicketFlow.Services.Inquiries.Api/Program.cs:line 53
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Http.RequestDelegateFactory.ExecuteTaskResult[T](Task`1 task, HttpContext httpContext)
+   at Microsoft.AspNetCore.Http.RequestDelegateFactory.<>c__DisplayClass101_2.<<HandleRequestBodyAndCompileRequestDelegateForJson>b__2>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)
+
+HEADERS
+=======
+Accept: */*
+Host: localhost:5011
+User-Agent: IntelliJ HTTP Client/JetBrains Rider 2025.1.4
+Accept-Encoding: br, deflate, gzip, x-gzip
+Content-Type: application/json
+Content-Length: 136
