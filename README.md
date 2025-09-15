@@ -63,7 +63,7 @@ sh ./run_infra.sh
  sh ./run_ticketflow.sh
 ```
 
-### Uruchomienie interfejsu uutkownika
+### Uruchomienie interfejsu użytkownika
 
 ```bash
  cd ./src_frontend && sh ./run_all_fe.sh
