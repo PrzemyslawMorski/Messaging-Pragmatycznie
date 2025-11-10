@@ -26,6 +26,7 @@ public static class Extensions
     public static IServiceCollection AddCore(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IInquiriesRepository, InquiriesRepository>();
+        services.AddScoped<Messaging.Consuming.Demultiplexing.TicketChangesHandler>();
         
         services
             .AddHttpClient()

@@ -17,8 +17,9 @@ public class InquiriesTopologyInitializer : TopologyInitializerBase
     {
         await CreateAnomalySynchronizationTopology(stoppingToken);
         
-        var topologyBuilder = ServiceProvider.GetService<ITopologyBuilder>();
+        var topologyBuilder = ServiceProvider.GetRequiredService<ITopologyBuilder>();
         
+        // TicketCreated is handled separately with routing key filter
         await topologyBuilder.CreateTopologyAsync(
             publisherSource: "tickets-exchange",
             consumerDestination: InquiriesConsumerService.TicketCreatedQueue,
@@ -27,19 +28,11 @@ public class InquiriesTopologyInitializer : TopologyInitializerBase
             cancellationToken: stoppingToken
         );
         
+        // All other ticket changes - no filter, receives all events from tickets-exchange
         await topologyBuilder.CreateTopologyAsync(
             publisherSource: "tickets-exchange",
-            consumerDestination: InquiriesConsumerService.AgentAssignedQueue,
+            consumerDestination: InquiriesConsumerService.TicketChangesQueue,
             TopologyType.PublishSubscribe,
-            filter: "agent-assigned",
-            cancellationToken: stoppingToken
-        );
-        
-        await topologyBuilder.CreateTopologyAsync(
-            publisherSource: "tickets-exchange",
-            consumerDestination: InquiriesConsumerService.TicketResolvedQueue,
-            TopologyType.PublishSubscribe,
-            filter: "ticket-resolved",
             cancellationToken: stoppingToken
         );
     }
