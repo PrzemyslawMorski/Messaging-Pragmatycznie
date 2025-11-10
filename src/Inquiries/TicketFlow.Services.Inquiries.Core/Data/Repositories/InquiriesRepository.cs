@@ -11,6 +11,9 @@ internal sealed class InquiriesRepository(InquiriesDbContext dbContext) : IInqui
     public async Task<Inquiry?> GetAsync(Guid id, CancellationToken cancellationToken = default)
         => await dbContext.Inquiries.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
     
+    public async Task<Inquiry?> GetByTicketIdAsync(Guid ticketId, CancellationToken cancellationToken = default)
+        => await dbContext.Inquiries.SingleOrDefaultAsync(x => x.TicketId == ticketId, cancellationToken);
+    
     public async Task AddAsync(Inquiry inquiry, CancellationToken cancellationToken = default)
     {
         dbContext.Inquiries.Add(inquiry);

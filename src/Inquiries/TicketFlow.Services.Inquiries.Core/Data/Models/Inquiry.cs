@@ -39,4 +39,26 @@ public sealed class Inquiry
         }
         TicketId = ticketId;
     }
+
+    public void Close()
+    {
+        if (Status == InquiryStatus.Closed)
+        {
+            return; // Already closed, idempotent operation
+        }
+        Status = InquiryStatus.Closed;
+    }
+
+    public void SetInProgress()
+    {
+        if (Status == InquiryStatus.InProgress)
+        {
+            return; // Already in progress, idempotent operation
+        }
+        if (Status == InquiryStatus.Closed || Status == InquiryStatus.Resolved)
+        {
+            throw new TicketFlowException($"Cannot set inquiry to InProgress when status is {Status}");
+        }
+        Status = InquiryStatus.InProgress;
+    }
 }  

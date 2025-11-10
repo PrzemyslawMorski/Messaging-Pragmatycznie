@@ -26,5 +26,21 @@ public class InquiriesTopologyInitializer : TopologyInitializerBase
             filter: "ticket-created",
             cancellationToken: stoppingToken
         );
+        
+        await topologyBuilder.CreateTopologyAsync(
+            publisherSource: "tickets-exchange",
+            consumerDestination: InquiriesConsumerService.AgentAssignedQueue,
+            TopologyType.PublishSubscribe,
+            filter: "agent-assigned",
+            cancellationToken: stoppingToken
+        );
+        
+        await topologyBuilder.CreateTopologyAsync(
+            publisherSource: "tickets-exchange",
+            consumerDestination: InquiriesConsumerService.TicketResolvedQueue,
+            TopologyType.PublishSubscribe,
+            filter: "ticket-resolved",
+            cancellationToken: stoppingToken
+        );
     }
 }
