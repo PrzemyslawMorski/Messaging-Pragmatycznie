@@ -9,7 +9,7 @@ internal sealed class TicketsRepository(TicketsDbContext dbContext) : ITicketsRe
         => await dbContext.Tickets.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
     public async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
-        => await dbContext.Tickets.AnyAsync(x => x.AssignedTo == id, cancellationToken);
+        => await dbContext.Tickets.AnyAsync(x => x.Id == id, cancellationToken);
 
     public async Task AddAsync(Ticket ticket, CancellationToken cancellationToken = default)
     {
