@@ -50,6 +50,7 @@ internal sealed class RabbitMqMessageConsumer(
             try
             {
                 await HandleMessageAsync(ea, handle, cancellationToken);
+                channel.BasicAck(ea.DeliveryTag, false);
             }
             catch (Exception exception)
             {
@@ -58,8 +59,6 @@ internal sealed class RabbitMqMessageConsumer(
                 await OnHandleFailure<TMessage>(ea, channel, exception, destinationResolved);
                 return;
             }
-            
-            channel.BasicNack(ea.DeliveryTag, false, true);
         };
 
         await EnsureTopologyReady(cancellationToken);
