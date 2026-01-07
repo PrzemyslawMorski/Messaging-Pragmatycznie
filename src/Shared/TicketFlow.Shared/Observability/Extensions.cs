@@ -18,19 +18,22 @@ public static class Extensions
         {
             return services;
         }
-        
+
         var section = configuration.GetSection(sectionName);
         services.Configure<ObservabilityOptions>(section);
         var endpoint = configuration.GetValue<string>($"{sectionName}:endpoint");
 
-        services.AddOpenTelemetry().WithTracing(x =>
+        services
+            .AddHttpContextAccessor()
+            .AddOpenTelemetry()
+            .WithTracing(x =>
         {
             x
             .SetResourceBuilder(
                 ResourceBuilder.CreateDefault()
                    .AddService(serviceName))
             .AddSource(
-                MessagingActivitySources.MessagingPublishSourceName, 
+                MessagingActivitySources.MessagingPublishSourceName,
                 MessagingActivitySources.MessagingConsumeSourceName)
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
@@ -39,7 +42,7 @@ public static class Extensions
                 options.Endpoint = new Uri(endpoint);
             });
         });
-        
+
         return services;
     }
 }

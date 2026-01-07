@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Transactions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using TicketFlow.Shared.AnomalyGeneration.CodeApi;
 using TicketFlow.Shared.Observability;
@@ -8,7 +9,8 @@ namespace TicketFlow.Shared.Messaging.Executor;
 
 internal sealed class MessageExecutor(
     IEnumerable<IMessageExecutionStep> executionSteps,
-    MessagePropertiesAccessor messagePropertiesAccessor, 
+    IHttpContextAccessor httpContextAccessor,
+    MessagePropertiesAccessor messagePropertiesAccessor,
     ILogger<MessageExecutor> logger,
     AnomalyContextAccessor anomalyContextAccessor) : IMessageExecutor
 {
@@ -76,8 +78,12 @@ internal sealed class MessageExecutor(
 
     private Activity? CreateMessagingExecutionActivity(MessageProperties messageProperties)
     {
+        var activityName = httpContextAccessor?.HttpContext is null
+            ? $"Message Execution: {messageProperties.MessageType}"
+            : $"HTTP Execution: {httpContextAccessor.HttpContext.Request.Path.Value}";
+
         var activitySource = new ActivitySource(MessagingActivitySources.MessagingPublishSourceName);
-        var activity = activitySource.StartActivity($"Message Execution: {messageProperties.MessageType}", ActivityKind.Producer, Activity.Current?.Context ?? default);
+        var activity = activitySource.StartActivity(activityName, ActivityKind.Producer, Activity.Current?.Context ?? default);
 
         if (activity is not null)
         {
