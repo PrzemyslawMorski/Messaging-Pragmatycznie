@@ -2,7 +2,9 @@ version: "1.0"
 
 services:
   rabbitmq:
-    image: rabbitmq-che
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: 'ticketflow-rabbitmq'
     restart: unless-stopped
     volumes:
@@ -29,6 +31,7 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
+    restart: unless-stopped
     networks:
       - TicketFlow
     ports:
